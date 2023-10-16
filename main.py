@@ -26,7 +26,7 @@ def main(page: ft.Page):
     
     
     
-    def create_row(e):
+    def create_row(e, df):
         ruc = dlg_crud.content.controls[1].value
         razon_social = dlg_crud.content.controls[3].value
         direccion = dlg_crud.content.controls[5].value
@@ -34,37 +34,53 @@ def main(page: ft.Page):
         new_row.to_sql('factura', con=engine, if_exists='append', index=False)
         df = pd.read_sql('SELECT * FROM factura', con=engine)
         page.update()
+        print(f"Registro creado con el RUC {ruc}")
+
 
     def update_row(e, df):
-        def get_selected_index(df):
-            # Obtén el RUC seleccionado en el cuadro de diálogo
-            selected_ruc = dlg_crud.content.controls[1].value  # Suponiendo que el RUC está en el primer campo de texto
-
-            # Encuentra el índice en el DataFrame donde el RUC coincide con el RUC seleccionado
-            selected_index = df[df['ruc'] == selected_ruc].index[0]
-
-            return selected_index
-        # Obtén los valores de los campos de texto del cuadro de diálogo
         ruc = dlg_crud.content.controls[1].value
         razon_social = dlg_crud.content.controls[3].value
         direccion = dlg_crud.content.controls[5].value
-    
-        # Obtén el índice de la fila seleccionada en el DataTable (asumiendo que tienes una variable index de fila seleccionada)
-        selected_index = get_selected_index(df)  # Define esta función para obtener el índice de fila seleccionada
-    
-        # Elimina el registro existente en la base de datos
-        old_ruc = df.loc[selected_index, 'ruc']  # Obtén el ruc del registro existente
-        engine.execute(f"DELETE FROM factura WHERE ruc = '{old_ruc}'")
-    
-        # Crea un nuevo DataFrame con los valores actualizados
-        new_row = pd.DataFrame({'ruc': [ruc], 'razon_social': [razon_social], 'direccion': [direccion]})
-    
-        # Inserta el nuevo registro en la base de datos
-        new_row.to_sql('factura', con=engine, if_exists='append', index=False)
-    
-        # Actualiza el DataFrame y la interfaz de usuario
-        df = pd.read_sql('SELECT * FROM factura', con=engine)
-        page.update()
+        
+
+        # Buscar el índice del registro existente por RUC
+        existing_row_index = df.index[df['ruc'] == ruc].tolist()
+
+        if existing_row_index:
+            # Eliminar el registro existente por su índice
+            df.drop(index=existing_row_index, inplace=True)
+
+            # Crear un nuevo DataFrame con los datos actualizados
+            new_row = pd.DataFrame({'ruc': [ruc], 'razon_social': [razon_social], 'direccion': [direccion]})
+
+            # Concatenar el nuevo registro al DataFrame
+            df = pd.concat([df, new_row], ignore_index=True)
+
+            # Guardar el DataFrame actualizado en la base de datos
+            df.to_sql('factura', con=engine, if_exists='replace', index=False)
+            page.update()
+            print(f"Registro actualizado con el RUC {ruc}")
+        else:
+            # Si no se encuentra el registro, mostrar un mensaje de error o hacer lo que consideres necesario
+            print(f"No se encontró un registro con el RUC {ruc}")
+
+    def delete_row(e, df):
+        ruc = dlg_crud.content.controls[1].value
+
+        # Buscar el índice del registro existente por RUC
+        existing_row_index = df.index[df['ruc'] == ruc].tolist()
+
+        if existing_row_index:
+            # Eliminar el registro existente por su índice
+            df.drop(index=existing_row_index, inplace=True)
+
+            # Guardar el DataFrame actualizado en la base de datos
+            df.to_sql('factura', con=engine, if_exists='replace', index=False)
+            page.update()
+            print(f"Registro eliminado con el RUC {ruc}")
+        else:
+            # Si no se encuentra el registro, mostrar un mensaje de error o hacer lo que consideres necesario
+            print(f"No se encontró un registro con el RUC {ruc}")
 
     dlg_crud = ft.AlertDialog(
         modal=True,
@@ -80,8 +96,9 @@ def main(page: ft.Page):
             ]
         ),
         actions=[
-            ft.TextButton(text="Crear", on_click=create_row),
-            ft.TextButton(text="Actualizar", on_click=update_row),
+            ft.TextButton(text="Crear", on_click= lambda e: create_row(e, df)),
+            ft.TextButton(text="Actualizar", on_click= lambda e: update_row(e, df)),
+            ft.TextButton(text="Eliminar", on_click= lambda e: delete_row(e, df)),
         ],
         on_dismiss=lambda: setattr(dlg_crud, "open", False),
     )
